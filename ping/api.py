@@ -21,10 +21,14 @@ class ReportResource(ModelResource):
         ]
 
     def trigger_report(self, request, **kwargs):
+        """
+        Initiates the generation of a report object.
+        """
         report = Report.objects.order_by("-last_updated").first()
 
-        # If the difference between the current datetime and that of
-        # the report is upto 45 minutes then return the report id:
+        # Since data source updates roughly only once per hour,
+        # if it's been less that DATA_POLL_PERIOD seconds since
+        # the last update, don't update again. Helps save the planet.
         if report and (datetime.now() - report.last_updated
                        <= timedelta(minutes=DATA_POLL_PERIOD)):
             return self.create_response(request, report.id)
