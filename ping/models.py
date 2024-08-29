@@ -8,17 +8,26 @@ from choices import REPORTS_DIR
 from tasks import populate_report_instance
 
 class Poll(models.Model):
+    """
+    The status of a store at a given datetime.
+    """
     status = models.BooleanField(null=False)
     store_id = models.BigIntegerField(null=False)
     timestamp = models.DateTimeField(null=False)
 
 
 class StoreTimezone(models.Model):
+    """
+    The timezone of a store.
+    """
     store_id = models.BigIntegerField(null=False)
     timezone = models.CharField(max_length=100, null=False, default="America/Chicago")
 
 
 class StoreBusinessHour(models.Model):
+    """
+    The business hours of a store.
+    """
     store_id = models.BigIntegerField(null=False)
 
     MONDAY = 0
@@ -45,16 +54,22 @@ class StoreBusinessHour(models.Model):
 
 
 class Report(models.Model):
-    def generate_file_path(self, filename):
+    """
+    Information about the uptime and downtime over
+    a span of an hour, day, and week. The actual
+    data will be stored in CSV files.
+    """
+    def __generate_file_path(self, filename):
         return "{}/{}{}".format(REPORTS_DIR, self.id, Path(filename).suffix)
 
     last_updated = models.DateTimeField(auto_now_add=True, null=False)
     file = models.FileField(
-        upload_to=generate_file_path,
+        upload_to=__generate_file_path,
         null=False, unique=True,
         validators=[FileExtensionValidator(["csv"])])
     status = models.BooleanField(null=False, default=False)
 
     def save(self, *args, **kwargs):
+        # Generate data and store it in a CSV file.
         populate_report_instance(self)
         super(Report, self).save(*args, **kwargs)
