@@ -1,9 +1,9 @@
-from __future__ import absolute_import, unicode_literals
+from __future__ import absolute_import
+from os import environ as os_environ
+
 from celery import Celery
 
 from django.conf import settings
-
-from os import environ as os_environ
 
 os_environ.setdefault('DJANGO_SETTINGS_MODULE', 'loop.settings')
 
