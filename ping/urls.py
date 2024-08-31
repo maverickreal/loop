@@ -8,7 +8,7 @@ from tastypie.api import Api
 v1_api = Api("v1")
 v1_api.register(ReportResource())
 
-url_patterns = [
+urlpatterns = [
     url(r"^api/", include(v1_api.urls)),
     url(r"^get_report/$", get_report),
 ]

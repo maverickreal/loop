@@ -5,6 +5,7 @@ from choices import DATA_POLL_PERIOD
 
 from ping.tasks import import_all_data, populate_report_instance
 from tastypie.resources import ModelResource
+from tastypie.utils import trailing_slash
 
 from django.conf.urls import url
 

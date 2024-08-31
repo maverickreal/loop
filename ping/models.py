@@ -10,6 +10,9 @@ class Store(models.Model):
     """
     The timezone of a store.
     """
+    id = models.BigIntegerField(primary_key=True,
+                                        unique=True,
+                                        null=False)
     timezone = models.CharField(max_length=100,
                                 null=False,
                                 default="America/Chicago")
