@@ -43,7 +43,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'tastypie'
+    'tastypie',
+    'ping',
 ]
 
 MIDDLEWARE = [
@@ -83,10 +84,10 @@ WSGI_APPLICATION = 'loop.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'loop',
+        'NAME': 'loop_db',
         'USER': 'loop_user',
         'PASSWORD': 'loop_password',
-        'HOST': 'localhost',
+        'HOST': '127.0.0.1',
         'PORT': '5432',
     }
 }

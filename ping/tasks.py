@@ -1,58 +1,16 @@
 from csv import writer as csv_writer
-from tempfile import TemporaryDirectory
+import datetime
 
-from django.db.models import Sum, Case, When, Value, IntegerField, F, Q
-from django.db.models.functions import Extract
+from django.db import transaction
 
+from backports import tempfile
 from celery import shared_task
 
-from models import Poll, StoreBusinessHour
-from choices import REPORT_GENERATION_RETRY_DELAY
+import choices
+from helpers import populate_objects, get_store_uptime_downtime
+import models
 
-def get_queryset_for_report():
-    """
-    A report consists of the uptime and downtime in the last hour, day, and week.
-    """
-    return (
-        Poll.objects.annotate(day_of_week=Extract(F('timestamp'), 'dow'))
-            .left_join(StoreBusinessHour, on={
-                'store_id': F('store_id'), 
-                'day_of_week': (Extract(F('timestamp'), 'dow') + 6) % 7
-            }).annotate(
-                uptime_week=Sum(Case(When(
-                    Q(timestamp__range=[start_date_time_with_timezone_week, end_date_time_with_timezone_week]) &
-                    Q(status='active'),
-                    then=Value(1)
-                    ), default=Value(0), output_field=IntegerField())),
-                uptime_day=Sum(Case(When(
-                    Q(timestamp__range=[start_date_time_with_timezone_day, end_date_time_with_timezone_day]) &
-                    Q(status='active'),
-                    then=Value(1)
-                    ), default=Value(0), output_field=IntegerField())),
-                uptime_hour=Sum(Case(When(
-                    Q(timestamp__range=[start_date_time_with_timezone_hour, end_date_time_with_timezone_hour]) &
-                    Q(status='active'),
-                    then=Value(1)
-                    ), default=Value(0), output_field=IntegerField())),
-                downtime_week=Sum(Case(When(
-                    Q(timestamp__range=[start_date_time_with_timezone_week, end_date_time_with_timezone_week]) &
-                    Q(status='active'),
-                    then=Value(0)
-                    ), default=Value(1), output_field=IntegerField())),
-                downtime_day=Sum(Case(When(
-                    Q(timestamp__range=[start_date_time_with_timezone_day, end_date_time_with_timezone_day]) &
-                    Q(status='active'),
-                    then=Value(0)
-                    ), default=Value(1), output_field=IntegerField())),
-                downtime_hour=Sum(Case(When(
-                    Q(timestamp__range=[start_date_time_with_timezone_hour, end_date_time_with_timezone_hour]) &
-                    Q(status='active'),
-                    then=Value(0)
-                    ), default=Value(1), output_field=IntegerField()))
-            ).filter(timestamp__range=[F('bh__start_time_local'), F('bh__end_time_local')])
-    )
-
-@shared_task(retry_jitter=True, ignore_result=True, retry_delay=REPORT_GENERATION_RETRY_DELAY, bind=True, max_retries=3)
+@shared_task(retry_jitter=True, ignore_result=True, retry_delay=choices.REPORT_GENERATION_RETRY_DELAY, bind=True, max_retries=3)
 def populate_report_instance(report):
     """
     Reads the poll logs from DB,
@@ -60,7 +18,7 @@ def populate_report_instance(report):
     and saves it to a CSV file.
     """
     try:
-        temp_dir = TemporaryDirectory()
+        temp_dir = tempfile.TemporaryFile()
         temp_file_path = temp_dir.name + "/report.csv"
 
         with open(temp_file_path, "w") as file:
@@ -69,15 +27,8 @@ def populate_report_instance(report):
                                 "update_last_week(in hours)", "downtime_last_hour(in minutes)",
                                 "downtime_last_day(in hours)", "downtime_last_week(in hours)"])
 
-            start_date_time_with_timezone_week = '2024-08-01 00:00:00'
-            end_date_time_with_timezone_week = '2024-08-07 23:59:59'
-            start_date_time_with_timezone_day = '2024-08-01 00:00:00'
-            end_date_time_with_timezone_day = '2024-08-01 23:59:59'
-            start_date_time_with_timezone_hour = '2024-08-01 12:00:00'
-            end_date_time_with_timezone_hour = '2024-08-01 13:00:00'
-
-            report_qs = get_queryset_for_report().\
-                values("store_id", "uptime_hour", "uptime_day",
+            report_qs = get_store_uptime_downtime()\
+                .values("store_id", "uptime_hour", "uptime_day",
                        "uptime_week", "downtime_hour", "downtime_day",
                        "downtime_week")
 
@@ -93,3 +44,13 @@ def populate_report_instance(report):
     except Exception as e:
         # must enable logging from hereon
         raise self.retry(exc=e)
+
+@shared_task(retry_jitter=True, ignore_result=True, retry_delay=choices.DB_IMPORT_RETRY_DELAY, bind=True, max_retries=3)
+@transaction.atomic
+def import_all_data(stores_file, business_hours_file, polls_file):
+    """
+    Populates the DB tables from CSV data sources.
+    """
+    populate_objects(stores_file, models.Store)
+    populate_objects(business_hours_file, models.StoreBusinessHour)
+    populate_objects(polls_file, models.Poll)

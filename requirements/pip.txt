@@ -1,6 +1,8 @@
 amqp==2.6.1
 astroid==1.6.6
 backports.functools-lru-cache==1.6.6
+backports.tempfile==1.0
+backports.weakref==1.0.post1
 billiard==3.6.4.0
 celery==4.4.7
 colorama==0.4.6

@@ -5,4 +5,6 @@ from os.path import join as path_join
 
 DATA_POLL_PERIOD = 45*60 # seconds
 REPORT_GENERATION_RETRY_DELAY = 60 # seconds
+DB_IMPORT_RETRY_DELAY = 60 # seconds
 REPORTS_DIR = path_join(MEDIA_ROOT, "reports")
+DATA_SOURCE_PARSE_CHUNK_SIZE = 1500 # records per chunk
