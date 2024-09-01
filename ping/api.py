@@ -18,15 +18,16 @@ class ReportResource(ModelResource):
         queryset = Report.objects.all()
 
     def obj_get(self, bundle, **kwargs):
-        report_id = kwargs.get('pk')
-
         try:
-            report = Report.objects.get(id=report_id)
+            report = Report.objects.get(id=kwargs.get('pk'))
+
+            if not report.status:
+                return HttpResponse("Running", status=200)
+
+            # Return CSV file along with status message
+            return self._get_response_with_status_and_file(report)
         except Report.DoesNotExist:
             raise Http404("Report not found")
-
-        # Return CSV file along with status message
-        return self._get_response_with_status_and_file(report)
 
     def _get_response_with_status_and_file(self, report):
         """
@@ -46,22 +47,11 @@ class ReportResource(ModelResource):
             response['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(report.file.path)
             return response
 
-    def prepend_urls(self):
-        return [
-            url(r"^%s/trigger_report/?$" % (
-                    self._meta.resource_name
-                ), self.wrap_view('trigger_report'),
-                name="api_trigger_report"),
-            url(r"^%s/rebuild_datastore/?$" % (
-                    self._meta.resource_name
-                ), self.wrap_view('rebuild_datastore'),
-                name="api_rebuild_datastore"),
-        ]
-
     def trigger_report(self, request, **kwargs):
         """
         Initiates the generation of a report object.
         """
+
         report = Report.objects.order_by("-last_updated").first()
 
         # Since data source updates roughly only once per hour,
