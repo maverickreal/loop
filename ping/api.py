@@ -20,6 +20,9 @@ class ReportResource(ModelResource):
         """
         Handles attaching the CSV file to the response.
         """
+        if type(data) == int:
+            return super(ReportResource, self).create_response(request, data, response_class, **response_kwargs)
+
         with open(data.obj.file.path, 'r') as file:
             response = HttpResponse(file.read(), content_type='text/csv')
             response['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(data.obj.file.path)
