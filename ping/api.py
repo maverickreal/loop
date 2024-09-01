@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 import os
 
-from loop import settings
 from models import Report
 from choices import DATA_POLL_PERIOD
 from tasks import import_all_data
@@ -17,9 +16,18 @@ class ReportResource(ModelResource):
         resource_name = "report"
         queryset = Report.objects.all()
 
+    def create_response(self, request, data, response_class=HttpResponse, **response_kwargs):
+        """
+        Handles attaching the CSV file to the response.
+        """
+        with open(data.obj.file.path, 'r') as file:
+            response = HttpResponse(file.read(), content_type='text/csv')
+            response['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(data.obj.file.path)
+            return response
+
     def obj_get(self, bundle, **kwargs):
         try:
-            report = Report.objects.get(id=kwargs.get('pk'))
+            report = Report.objects.get(id=kwargs.get('id'))
 
             if not report.status:
                 return HttpResponse("Running", status=200)
@@ -41,11 +49,7 @@ class ReportResource(ModelResource):
             report.delete()
             return HttpResponse("Could'nt find any file corresponding to this report", status=404)
 
-        # Prepare the CSV response
-        with open(file_path, 'r') as file:
-            response = HttpResponse(file.read(), content_type='text/csv')
-            response['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(report.file.path)
-            return response
+        return report
 
     def trigger_report(self, request, **kwargs):
         """

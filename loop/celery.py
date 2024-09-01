@@ -11,4 +11,5 @@ os_environ.setdefault('DJANGO_SETTINGS_MODULE',
 app = Celery('loop')
 app.config_from_object('django.conf:settings',
                        namespace='CELERY')
+# app.conf.broker_transport_options = {"visibility_timeout": float("inf")}
 app.autodiscover_tasks(lambda: settings.INSTALLED_APPS)

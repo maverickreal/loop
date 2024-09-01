@@ -1,5 +1,6 @@
 from csv import writer as csv_writer
 from datetime import datetime, timedelta
+import os
 
 from backports import tempfile
 from celery import shared_task
@@ -7,7 +8,7 @@ from celery import shared_task
 from django.db.models import Max
 
 import choices
-from helpers import fine_tune_aggregate, get_store_uptime_downtime, populate_objects, get_store_stats
+from helpers import fine_tune_aggregate, get_datetime_from_str, get_store_uptime_downtime, loggit, populate_objects, get_store_stats
 import models
 
 @shared_task(retry_jitter=True,
@@ -23,6 +24,12 @@ def populate_report_instance(self, report_id):
     """
 
     try:
+        report = models.Report.objects.filter(id=report_id).first()
+
+        if report.file and os.path.exists(report.file.path):
+            loggit("Report {} already exists".format(report_id))
+            return
+
         temp_dir = tempfile.TemporaryDirectory()
         temp_file_path = temp_dir.name + "/report.csv"
 
@@ -35,26 +42,23 @@ def populate_report_instance(self, report_id):
             max_timestamp = models.Poll.objects.aggregate(max_ts=Max('timestamp'))['max_ts']
 
             for store_id, poll_timestamp, status in get_store_stats(max_timestamp):
-                store_id = int(store_id)
-                poll_timestamp = datetime.fromtimestamp(poll_timestamp)
-                status = status=='t'
 
                 if not store_data or store_id==store_data[-1][0]:
                     store_data.append((store_id, poll_timestamp, status))
                 else:
-                    cur_row = get_store_uptime_downtime(store_data, poll_timestamp)
+                    cur_row = get_store_uptime_downtime(store_data, max_timestamp)
                     cur_row = fine_tune_aggregate(store_data, *cur_row)
                     cur_row = [store_data[-1][0]] + cur_row
                     writer.writerow(cur_row)
                     store_data = []
 
             if store_data:
-                cur_row = get_store_uptime_downtime(store_data, poll_timestamp)
+                cur_row = get_store_uptime_downtime(store_data, max_timestamp)
                 cur_row = fine_tune_aggregate(store_data, *cur_row)
                 cur_row = [store_data[-1][0]] + cur_row
                 writer.writerow(cur_row)
 
-            report = models.Report.objects.filter(id=report_id).first()
+            report.refresh_from_db()
             report.file.save("report.csv", open(temp_file_path, 'rb'))
             report.status = True
             report.save()
@@ -62,7 +66,7 @@ def populate_report_instance(self, report_id):
         temp_dir.cleanup()
     except Exception as e:
         # TODO: must enable logging from hereon
-        print("Error in populate_report_instance: %s" % e)
+        loggit("Error in populate_report_instance: %s" % e)
         raise self.retry(exc=e)
 
 @shared_task(retry_jitter=True,
@@ -75,14 +79,14 @@ def import_all_data(self):
     Populates the DB tables from CSV data sources.
     """
     try:
-        print("Kindly be patient. This may take upto several minutes.")
+        loggit("Kindly be patient. This may take upto several minutes.")
         populate_objects(models.Store)
-        print("Done populating stores.")
+        loggit("Done populating stores.")
         populate_objects(models.StoreBusinessHour)
-        print("Done populating store business hours.")
+        loggit("Done populating store business hours.")
         populate_objects(models.Poll)
-        print("Done populating store polls.")
+        loggit("Done populating store polls.")
     except Exception as e:
         # TODO: must enable logging from hereon
-        print("Error in import_all_data: %s" % e)
+        loggit("Error in import_all_data: %s" % e)
         raise self.retry(exc=e)
