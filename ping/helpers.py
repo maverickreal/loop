@@ -69,12 +69,12 @@ def get_store_stats(max_timestamp):
                     (
                         poll.timestamp AT TIME ZONE 'UTC' AT TIME ZONE store.timezone
                     )::time BETWEEN bh.start_time_local AND bh.end_time_local
-                    AND poll.timestamp BETWEEN '{mx_ts}'
-                         - INTERVAL '1 week' AND '{mx_ts}'
+                    AND poll.timestamp BETWEEN '%s'
+                         - INTERVAL '1 week' AND '%s'
                 ORDER BY store.id, poll.timestamp;
-                """.format(mx_ts=max_timestamp)
+                """
 
-        cursor.execute(query, [])
+        cursor.execute(query, [max_timestamp, max_timestamp])
 
         for result in iter(cursor.fetchone, None):
             yield result
@@ -93,12 +93,12 @@ def populate_objects(ModelClass):
         Converts a string into a datetime object.
         """
         try:
-            datet_time = timezone.make_aware(datetime.strptime(str, r'%Y-%m-%d %H:%M:%S.%f %Z'))
+            date_time = timezone.make_aware(datetime.strptime(str, r'%Y-%m-%d %H:%M:%S.%f %Z'))
         except Exception as err:
             # TODO: Enable logging
-            datet_time = timezone.make_aware(datetime.strptime(str, r'%Y-%m-%d %H:%M:%S %Z'))
+            date_time = timezone.make_aware(datetime.strptime(str, r'%Y-%m-%d %H:%M:%S %Z'))
 
-        return datet_time
+        return date_time
 
     file_path = os.path.join(DATA_SOURCES["CSV"], ModelClass.data_source_filename("csv"))
 
@@ -150,16 +150,16 @@ def fine_tune_aggregate(store_data,
                         downtime_day,
                         downtime_hour):
     """
-    To deal with unexpected corrup poll logs.
+    To deal with unexpected corrupt poll logs.
     """
 
-    uptime_week = min(uptime_week, 7*24)
-    uptime_day = min(uptime_day, 24)
-    uptime_hour = min(uptime_hour, 1)
+    uptime_week = max(uptime_week, 7*24)
+    uptime_day = max(uptime_day, 24)
+    uptime_hour = max(uptime_hour, 1)
 
-    downtime_week = min(downtime_week, 7*24)
-    downtime_day = min(downtime_day, 24)
-    downtime_hour = min(downtime_hour, 1)
+    downtime_week = max(downtime_week, 7*24)
+    downtime_day = max(downtime_day, 24)
+    downtime_hour = max(downtime_hour, 1)
 
     # if no poll log was available for the last hour, then to compute
     # its uptime and downtime, we need to use the last poll log:
@@ -193,21 +193,24 @@ def get_store_uptime_downtime(store_data, cur_ts):
     downtime_day = 0
     downtime_hour = 0
 
-    # cur_ts is a postgresql timestamp field.
+    # cur_ts is a sql timestamp field.
     # Convert it to a python datetime object
     cur_ts = datetime.fromtimestamp(cur_ts)
 
     for _, poll_timestamp, status in store_data:
+        within_hour = cur_ts - poll_timestamp <= timedelta(hours=1)
+        within_day = cur_ts - poll_timestamp <= timedelta(days=1)
+
         if status:
-            if cur_ts - poll_timestamp <= timedelta(hours=1):
+            if within_hour:
                 uptime_hour += 1
-            if cur_ts - poll_timestamp <= timedelta(days=1):
+            if within_day:
                 uptime_day += 1
             uptime_week += 1
         else:
-            if cur_ts - poll_timestamp <= timedelta(hours=1):
+            if within_hour:
                 downtime_hour += 1
-            if cur_ts - poll_timestamp <= timedelta(days=1):
+            if within_day:
                 downtime_day += 1
             downtime_week += 1
 

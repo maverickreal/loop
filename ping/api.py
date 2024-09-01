@@ -75,6 +75,8 @@ class ReportResource(ModelResource):
 
         return self.create_response(request, report.id)
 
+    trigger_report.allowed_methods = ['get']
+
     def rebuild_datastore(self, request, **kwargs):
         """
         Parses the data sources to replenish the DB tables.

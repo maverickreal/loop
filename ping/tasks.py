@@ -48,6 +48,12 @@ def populate_report_instance(self, report_id):
                     writer.writerow(cur_row)
                     store_data = []
 
+            if store_data:
+                cur_row = get_store_uptime_downtime(store_data, poll_timestamp)
+                cur_row = fine_tune_aggregate(store_data, *cur_row)
+                cur_row = [store_data[-1][0]] + cur_row
+                writer.writerow(cur_row)
+
             report = models.Report.objects.filter(id=report_id).first()
             report.file.save("report.csv", open(temp_file_path, 'rb'))
             report.status = True
@@ -56,7 +62,7 @@ def populate_report_instance(self, report_id):
         temp_dir.cleanup()
     except Exception as e:
         # TODO: must enable logging from hereon
-        print(e)
+        print("Error in populate_report_instance: %s" % e)
         raise self.retry(exc=e)
 
 @shared_task(retry_jitter=True,
@@ -69,6 +75,7 @@ def import_all_data(self):
     Populates the DB tables from CSV data sources.
     """
     try:
+        print("Kindly be patient. This may take upto several minutes.")
         populate_objects(models.Store)
         print("Done populating stores.")
         populate_objects(models.StoreBusinessHour)
@@ -77,5 +84,5 @@ def import_all_data(self):
         print("Done populating store polls.")
     except Exception as e:
         # TODO: must enable logging from hereon
-        print(e)
+        print("Error in import_all_data: %s" % e)
         raise self.retry(exc=e)
