@@ -3,22 +3,45 @@ from datetime import time as datetime_time
 from django.db import models
 from django.core.validators import FileExtensionValidator
 
+from pathlib2 import Path
+
 from ping.helpers import generate_file_path
 from tasks import populate_report_instance
 
-class Store(models.Model):
+class BaseDataSourceModel(models.Model):
+    """
+    Base model class for all model classes that
+    are populated through data sources.
+    """
+
+    @classmethod
+    def data_source_filename(cls, filetype):
+        return "{}.{}".format(cls._meta.db_table, filetype)
+
+    def data_destination_filename(self, filename):
+        return generate_file_path(self, filename)
+
+    class Meta:
+        abstract = True
+
+
+class Store(BaseDataSourceModel):
     """
     The timezone of a store.
     """
-    id = models.BigIntegerField(primary_key=True,
-                                        unique=True,
-                                        null=False)
+
+    id = models.BigIntegerField(primary_key=True)
     timezone = models.CharField(max_length=100,
                                 null=False,
                                 default="America/Chicago")
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['timezone']),
+        ]
 
-class Poll(models.Model):
+
+class Poll(BaseDataSourceModel):
     """
     The status of a store at a given datetime.
     """
@@ -28,8 +51,14 @@ class Poll(models.Model):
                               related_name="polls")
     timestamp = models.DateTimeField(null=False)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['timestamp']),
+            models.Index(fields=['store', 'timestamp']),
+        ]
 
-class StoreBusinessHour(models.Model):
+
+class StoreBusinessHour(BaseDataSourceModel):
     """
     The business hours of a store.
     """
@@ -63,8 +92,13 @@ class StoreBusinessHour(models.Model):
     end_time_local = models.TimeField(null=False,
                                       default=datetime_time(23, 59))
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['store', 'day_of_week']),
+        ]
 
-class Report(models.Model):
+
+class Report(BaseDataSourceModel):
     """
     Information about the uptime and downtime over
     a span of an hour, day, and week. The actual
@@ -82,5 +116,5 @@ class Report(models.Model):
 
     def save(self, *args, **kwargs):
         # Generate data and store it in a CSV file.
-        populate_report_instance(self)
         super(Report, self).save(*args, **kwargs)
+        populate_report_instance.delay(self.id)
