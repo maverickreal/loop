@@ -20,7 +20,8 @@ class ReportResource(ModelResource):
         """
         Handles attaching the CSV file to the response.
         """
-        if not isinstance(data, Report):
+
+        if not isinstance(data, object):
             return super(ReportResource, self).create_response(request, data, response_class, **response_kwargs)
 
         with open(data.obj.file.path, 'r') as file:
