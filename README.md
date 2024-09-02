@@ -1,12 +1,9 @@
-just spawn a docker container for postgresql and rabbitmq and bind it to its default port.
-For postgres container, its host, port, username, password, db name are:
+To setup test environment, run the following in shell:
+
+```sh
+docker-compose up -d
 ```
-{
-  'NAME': 'loop_db',
-  'USER': 'loop_user',
-  'PASSWORD': 'loop_password',
-  'HOST': '127.0.0.1',
-  'PORT': '5432',
-}
+Then in another terminal:
+```sh
+python manage.py migrate
 ```
-Then run the migrations, and start using!
