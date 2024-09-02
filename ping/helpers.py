@@ -76,11 +76,12 @@ def get_store_stats(max_timestamp):
                         )
                     )
                 WHERE
-                    (
+                    ((
                         poll.timestamp AT TIME ZONE 'UTC' AT TIME ZONE store.timezone
-                    )::time BETWEEN bh.start_time_local AND bh.end_time_local
-                    AND poll.timestamp BETWEEN CAST('{max_ts}' AS TIMESTAMPTZ)
-                        - INTERVAL '1 week' AND CAST('{max_ts}' AS TIMESTAMPTZ)
+                    )::time BETWEEN COALESCE(bh.start_time_local, '00:00:00'::time) AND
+                    COALESCE(bh.end_time_local, '23:59:59'::time))
+                    AND (poll.timestamp BETWEEN (CAST('{max_ts}' AS TIMESTAMPTZ)
+                        - INTERVAL '1 week') AND CAST('{max_ts}' AS TIMESTAMPTZ))
                 ORDER BY store.id, poll.timestamp;
                 """.format(max_ts=max_timestamp)
 
@@ -163,13 +164,13 @@ def fine_tune_aggregate(store_data,
     To deal with unexpected corrupt poll logs.
     """
 
-    uptime_week = min(uptime_week, 7*24)
-    uptime_day = min(uptime_day, 24)
-    uptime_hour = min(uptime_hour, 1)
+    uptime_week = min(int(uptime_week), 7*24)
+    uptime_day = min(int(uptime_day), 24)
+    uptime_hour = min(int(uptime_hour), 1) * 60
 
-    downtime_week = min(downtime_week, 7*24)
-    downtime_day = min(downtime_day, 24)
-    downtime_hour = min(downtime_hour, 1)
+    downtime_week = min(int(downtime_week), 7*24)
+    downtime_day = min(int(downtime_day), 24)
+    downtime_hour = min(int(downtime_hour), 1) * 60
 
     # if no poll log was available for the last hour, then to compute
     # its uptime and downtime, we need to use the last poll log:
@@ -177,15 +178,38 @@ def fine_tune_aggregate(store_data,
         _, _, last_status = store_data[-1]
 
         if last_status:
-            uptime_hour = 1
+            uptime_hour = 60
         else:
-            downtime_hour = 1
+            downtime_hour = 60
+    elif (uptime_hour + downtime_hour) > 60:
+        if uptime_hour > downtime_hour:
+            uptime_hour -= (uptime_hour + downtime_hour) - 60
+        else:
+            downtime_hour -= (uptime_hour + downtime_hour) - 60
+    elif uptime_hour > downtime_hour:
+        uptime_hour += 60 - (uptime_hour + downtime_hour)
+    else:
+        downtime_hour += 60 - (uptime_hour + downtime_hour)
 
-    if uptime_day + downtime_day < 24:
-        uptime_hour += 24 - (uptime_day + downtime_day)
+    if (uptime_day + downtime_day) > 24:
+        if uptime_day > downtime_day:
+            uptime_day -= (uptime_day + downtime_day) - 24
+        else:
+            downtime_day -= (uptime_day + downtime_day) - 24
+    elif uptime_day > downtime_day:
+        uptime_day += 24 - (uptime_day + downtime_day)
+    else:
+        downtime_day += 24 - (uptime_day + downtime_day)
 
-    if uptime_week + downtime_week < 7*24:
+    if (uptime_week + downtime_week) > 7*24:
+        if uptime_week > downtime_week:
+            uptime_week -= (uptime_week + downtime_week) - 7*24
+        else:
+            downtime_week -= (uptime_week + downtime_week) - 7*24
+    elif uptime_week > downtime_week:
         uptime_week += 7*24 - (uptime_week + downtime_week)
+    else:
+        downtime_week += 7*24 - (uptime_week + downtime_week)
 
     return [uptime_hour,
             uptime_day,
@@ -204,18 +228,18 @@ def get_store_uptime_downtime(store_data, cur_ts):
     downtime_hour = 0
 
     for _, poll_timestamp, status in store_data:
-        within_hour = cur_ts - poll_timestamp <= timedelta(hours=1)
-        within_day = cur_ts - poll_timestamp <= timedelta(days=1)
+        within_hour = (cur_ts - poll_timestamp) <= timedelta(hours=1)
+        within_day = (cur_ts - poll_timestamp) <= timedelta(days=1)
 
         if status:
             if within_hour:
-                uptime_hour += 1
+                uptime_hour = 1
             if within_day:
                 uptime_day += 1
             uptime_week += 1
         else:
             if within_hour:
-                downtime_hour += 1
+                downtime_hour = 1
             if within_day:
                 downtime_day += 1
             downtime_week += 1
