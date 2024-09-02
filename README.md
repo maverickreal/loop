@@ -11,7 +11,7 @@ python manage.py runserver;
 ```
 Then in another shell:
 ```
-celery -A loop purge; celery -A loop worker -l debug -P geven;
+celery -A loop purge; celery -A loop worker -l debug -P gevent;
 ```
 ## NOTE 2
 The first request you must fire is a get request to `{{host}}:{{port}}/rebuild_datastore/`
