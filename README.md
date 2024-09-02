@@ -5,5 +5,6 @@ docker-compose up -d
 ```
 Then in another terminal:
 ```sh
-python manage.py migrate
+python manage.py migrate;
+python manage.py runserver;
 ```
