@@ -1,5 +1,6 @@
 To setup test environment, run the following in shell:
-
+## NOTE 1
+Kindly create a python2.7 virtual environment, clone the repo inside it, activate the virtual environment, and then run stuff from within `/loop`.
 ```sh
 docker-compose up -d
 ```
