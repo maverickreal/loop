@@ -9,6 +9,10 @@ Then in another terminal:
 python manage.py migrate;
 python manage.py runserver;
 ```
+Then in another shell:
+```
+celery -A loop purge; celery -A loop worker -l debug -P geven;
+```
 ## NOTE 2
 The first request you must fire is a get request to `{{host}}:{{port}}/rebuild_datastore/`
 Example, `GET 127.0.0.1:8000/rebuild_datastore/`
