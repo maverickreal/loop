@@ -9,3 +9,4 @@ For postgres container, its host, port, username, password, db name are:
   'PORT': '5432',
 }
 ```
+Then run the migrations, and start using!
